@@ -321,9 +321,9 @@ jobs:
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
           # NEW: Windows Arm64
           - os: windows
-            target: aarch64
-            python-architecture: arm64 # Explicitly specify arm64 for setup-python
-            interpreter: 3.11 3.12 3.13 3.14 # As per your comment, aarch64 only 3.11 and up
+            target: aarch64-pc-windows-msvc # Or just aarch64 if maturin can infer
+            python-architecture: arm64
+            interpreter: 3.11 3.12 3.13 3.14 # Or whatever versions
 
         exclude:
           # PGO optimized below (keep this exclusion)
