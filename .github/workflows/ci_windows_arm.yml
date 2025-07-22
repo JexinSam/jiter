@@ -71,15 +71,16 @@ jobs:
       - name: Install Built Wheel and Dependencies
         # Install the built wheel and any Python test dependencies using uv
         run: |
-          uv sync --frozen --no-install-project # Syncs project dependencies
-          uv pip install ormsgpack --no-index --find-links crates/jiter-python/dist # Install your built wheel
-          uv pip install -r crates/jiter-python/tests/requirements.txt # Install test dependencies
-        working-directory: crates/jiter-python
+          # If you don't have uv.lock committed, remove --frozen here:
+          uv sync # Syncs project dependencies, expects uv.lock
+          uv pip install ormsgpack --no-index --find-links dist # Corrected path for dist
+          uv pip install -r tests/requirements.txt # Corrected path for requirements.txt
+        working-directory: crates/jiter-python # The base directory for relative paths
 
       - name: Run Tests
         # Execute your Python tests
         run: uv run --no-sync pytest tests
-        working-directory: crates/jiter-python
+        working-directory: crates/jiter-python # The base directory for relative paths
 
       - name: Upload Built Wheels
         # Upload the generated wheels as a workflow artifact
