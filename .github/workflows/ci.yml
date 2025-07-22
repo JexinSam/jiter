@@ -256,77 +256,113 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [linux] # windows and macos builds added manually
-        target: [x86_64, aarch64]
-        manylinux: [auto]
+        os: [linux, windows, macos] # Added windows and macos here to simplify the matrix below
+        target: [x86_64] # Default target
+        manylinux: [auto] # Default manylinux for Linux
+        interpreter: [] # Placeholder for interpreter versions, filled by include
+        python-architecture: [x64] # Default for x86_64, will be 'x86' for i686 and 'arm64' for aarch64
         include:
-          # manylinux for various platforms
+          # --- Linux (original entries) ---
           - os: linux
             manylinux: auto
             target: i686
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x86 # i686 usually corresponds to x86 python
           - os: linux
             manylinux: auto
             target: aarch64
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64 # Most linux aarch64 runners have 64-bit python
           - os: linux
             manylinux: auto
             target: armv7
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64 # Most linux armv7 runners have 64-bit python
           - os: linux
             manylinux: auto
             target: ppc64le
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64
           - os: linux
             manylinux: auto
             target: s390x
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64
 
           # musllinux
           - os: linux
             manylinux: musllinux_1_1
             target: x86_64
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64
           - os: linux
             manylinux: musllinux_1_1
             target: aarch64
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64
 
-          # macos;
-          # all versions x86_64
-          # older pythons which can't be run on the arm hardware for PGO
+          # --- macOS (original entries) ---
           - os: macos
             target: x86_64
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+            python-architecture: x64
           - os: macos
             target: aarch64
-            interpreter: "3.9"
+            interpreter: "3.9 3.10 3.11 3.12 3.13 3.14" # PYO3/maturin-action for universal2 will handle splitting if target is universal2
+            python-architecture: x64 # For universal2, it's generally x64, even if aarch64 is built too
 
-          # windows;
-          # aarch64 only 3.11 and up, also not PGO optimized
+          # --- Windows (Updated and Added Arm64) ---
           - os: windows
             target: i686
             python-architecture: x86
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
-          # FIXME had link failures, needs investigation
-          # - os: windows
-          #   target: aarch64
-          #   interpreter: 3.11 3.12
+          - os: windows
+            target: x86_64 # Ensure explicit x86_64 entry exists with specific python-architecture
+            python-architecture: x64
+            interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
+          # NEW: Windows Arm64
+          - os: windows
+            target: aarch64
+            python-architecture: arm64 # Explicitly specify arm64 for setup-python
+            interpreter: 3.11 3.12 3.13 3.14 # As per your comment, aarch64 only 3.11 and up
+
         exclude:
-          # PGO optimized below
+          # PGO optimized below (keep this exclusion)
           - os: linux
             manylinux: auto
             target: x86_64
+          # Exclude specific macOS combinations if PGO is preferred, or to avoid redundancy
+          - os: macos
+            target: x86_64
+            interpreter: "3.10" # If PGO covers 3.10+ on macOS x86_64
+          # Exclude if you only want PGO for these or have specific issues
+          - os: windows
+            target: x86_64
+            interpreter: "3.10" # If PGO covers 3.10+ on Windows x86_64
 
-    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
+    runs-on: ${{ (matrix.os == 'windows' && (matrix.target == 'aarch64' && 'windows-11-arm' || 'windows-latest')) || (matrix.os == 'macos' && 'macos-latest') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
+
+      # Conditional Rustup installation for Windows Arm64
+      - name: Install Rustup for Windows Arm64
+        if: matrix.os == 'windows' && matrix.target == 'aarch64'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable # Use stable or your preferred toolchain
+          target: aarch64-pc-windows-msvc
+          override: true
 
       - name: set up python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.13" # This is just the version for setup-python itself, not the target interpreter
           architecture: ${{ matrix.python-architecture || 'x64' }}
 
       - name: build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.target == 'aarch64' && (matrix.os == 'windows' && 'aarch64-pc-windows-msvc' || matrix.os == 'macos' && 'universal2-apple-darwin' || matrix.os == 'linux' && 'aarch64-unknown-linux-gnu') || (matrix.target == 'armv7' && 'armv7-unknown-linux-gnueabihf') || (matrix.target == 'i686' && 'i686-unknown-linux-gnu') || (matrix.target == 'ppc64le' && 'powerpc64le-unknown-linux-gnu') || (matrix.target == 's390x' && 's390x-unknown-linux-gnu') || (matrix.target == 'x86_64' && (matrix.os == 'windows' && 'x86_64-pc-windows-msvc' || matrix.os == 'macos' && 'universal2-apple-darwin' || 'x86_64-unknown-linux-gnu')) }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --out dist --interpreter ${{ matrix.interpreter || '3.9 3.10 3.11 3.12 3.13 3.14' }}
           rust-toolchain: stable
@@ -360,8 +396,19 @@ jobs:
           - os: windows
             ls: dir
             runs-on: windows-latest
+            # Add explicit Windows Arm64 PGO (use aarch64 target for the runner selection)
+            # IMPORTANT: Confirm PGO is fully supported and stable for Windows on ARM.
+            # If `build-pgo` fails on `windows-11-arm`, you might need to exclude it or
+            # use a conditional `runs-on` based on `matrix.architecture` for PGO.
+          - os: windows
+            runs-on: windows-11-arm # Target ARM64 runner for PGO
+            interpreter: ["3.11", "3.12", "3.13", "3.14"] # Adjust based on actual Python versions available on windows-11-arm that support PGO
+            target_architecture: aarch64 # Add this to distinguish for run-on and maturin-action
+            ls: dir
           - os: macos
             runs-on: macos-latest
+            target_architecture: universal2 # For PGO, it usually targets universal2
+
         exclude:
           # macos arm only supported from 3.10 and up
           - os: macos
@@ -372,10 +419,24 @@ jobs:
             interpreter: "3.14"
           - os: windows
             interpreter: "3.14t"
+          # Exclude AARCH64 Windows for PGO if it proves unstable or not working
+          # - os: windows
+          #   runs-on: windows-11-arm # Explicitly exclude the arm64 runner if PGO doesn't work
+          #   interpreter: "3.11" # For example, if 3.11 aarch64 PGO fails
+          #   target_architecture: aarch64
 
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
+
+      # Conditional Rustup installation for Windows Arm64
+      - name: Install Rustup for Windows Arm64 (PGO)
+        if: matrix.os == 'windows' && matrix.target_architecture == 'aarch64'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable # Use stable or your preferred toolchain
+          target: aarch64-pc-windows-msvc
+          override: true
 
       - id: setup-python
         name: set up python
@@ -383,18 +444,25 @@ jobs:
         with:
           python-version: ${{ matrix.interpreter }}
           allow-prereleases: true
+          # For PGO on Windows Arm64, ensure architecture is set correctly
+          architecture: ${{ (matrix.os == 'windows' && matrix.target_architecture == 'aarch64' && 'arm64') || 'x64' }}
 
       - name: install rust stable
         id: rust-toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools
+          # Ensure targets are installed for PGO if cross-compiling or building for specific arch
+          targets: ${{ (matrix.os == 'windows' && matrix.target_architecture == 'aarch64' && 'aarch64-pc-windows-msvc') || '' }}
+
 
       - name: build pgo wheel
         uses: ./.github/actions/build-pgo-wheel
         with:
           interpreter: ${{ matrix.interpreter }}
           rust-toolchain: ${{ steps.rust-toolchain.outputs.name }}
+          # Pass target to the custom action if it needs it for PGO compilation
+          target: ${{ (matrix.os == 'windows' && matrix.target_architecture == 'aarch64' && 'aarch64-pc-windows-msvc') || '' }}
 
       - run: ${{ matrix.ls || 'ls -lh' }} crates/jiter-python/dist/
 
@@ -506,6 +574,12 @@ jobs:
         include:
           - target: aarch64
             distro: alpine_latest
+          # Add Windows Arm64 test if you have a way to run it on Arm emulator (e.g., using uraimo/run-on-arch-action with Windows support or custom setup)
+          # This is more complex than just building, might require Windows Arm64 runner directly for testing
+          # - target: aarch64 # For Windows arm64
+          #   distro: windows-arm64 # A conceptual distro for Windows Arm64 testing
+          #   # You would likely need to run this directly on `windows-11-arm` runner, not through run-on-arch-action
+          #   # And download artifacts specific to `pypi_files_windows_aarch64_*`
 
     steps:
       - uses: actions/checkout@v4
@@ -553,8 +627,22 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, macos, windows]
+        include:
+          # Explicitly target Windows Arm64 for testing, using the dedicated runner
+          - os: windows
+            runner: windows-11-arm
+            architecture: arm64 # Add this to differentiate for python setup
+          - os: windows
+            runner: windows-latest
+            architecture: x64
+          - os: ubuntu
+            runner: ubuntu-latest
+            architecture: x64
+          - os: macos
+            runner: macos-latest
+            architecture: x64
 
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -562,21 +650,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          architecture: ${{ matrix.architecture }} # Use the architecture variable
 
       - name: get dist artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: pypi_files_*
+          pattern: pypi_files_${{ matrix.os }}_* # Download all wheels for the specific OS
           merge-multiple: true
           path: crates/jiter-python/dist
 
       - name: run tests
         run: |
+          cd crates/jiter-python
           python3 -m pip install -U pip -r tests/requirements.txt
           python3 -m pip install jiter --no-index --no-deps --find-links dist --force-reinstall
           python3 -m pytest
           python3 -c 'import jiter; print(jiter.__version__)'
-        working-directory: crates/jiter-python
 
   # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
   check:
@@ -614,6 +703,9 @@ jobs:
       - test-builds-os
       - build-sdist
       - build-wasm-emscripten
+      # Add `build` and `build-pgo` explicitly if not already covered by `test-builds-os` needs
+      - build # Ensure `build` job artifacts are available
+      - build-pgo # Ensure `build-pgo` job artifacts are available
     if: success() && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     environment: release-python
