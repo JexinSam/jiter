@@ -258,7 +258,7 @@ jobs:
         os: [linux, windows, macos] # Added windows and macos here to simplify the matrix below
         target: [x86_64] # Default target
         manylinux: [auto] # Default manylinux for Linux
-        interpreter: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"] 
+        interpreter: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
         python-architecture: [x64] # Default for x86_64, will be 'x86' for i686 and 'arm64' for aarch64
         include:
           # --- Linux (original entries) ---
