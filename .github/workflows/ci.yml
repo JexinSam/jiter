@@ -368,6 +368,20 @@ jobs:
         with:
           python-version: "3.13" # This is just the version for setup-python itself, not the target interpreter
           architecture: ${{ matrix.python-architecture || 'x64' }}
+      
+      - name: Set up Python 3.11 (ARM64)
+        if: matrix.os == 'windows' && matrix.target == 'aarch64'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: 'arm64' # This will correctly install the ARM64 version on an ARM64 runner
+    
+      - name: Set up Python 3.12 (ARM64)
+        if: matrix.os == 'windows' && matrix.target == 'aarch64'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'arm64'
 
       - name: build wheels
         uses: PyO3/maturin-action@v1
