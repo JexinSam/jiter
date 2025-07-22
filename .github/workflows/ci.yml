@@ -258,7 +258,7 @@ jobs:
         os: [linux, windows, macos] # Added windows and macos here to simplify the matrix below
         target: [x86_64] # Default target
         manylinux: [auto] # Default manylinux for Linux
-        interpreter: [] # Placeholder for interpreter versions, filled by include
+        interpreter: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"] 
         python-architecture: [x64] # Default for x86_64, will be 'x86' for i686 and 'arm64' for aarch64
         include:
           # --- Linux (original entries) ---
@@ -338,6 +338,12 @@ jobs:
           - os: windows
             target: x86_64
             interpreter: "3.10" # If PGO covers 3.10+ on Windows x86_64
+          - os: windows
+            target: i686
+            interpreter: "3.14" # Example: if 3.14 on i686 windows is problematic
+          - os: windows
+            target: aarch64
+            interpreter: 3.9 3.10 # Exclude older Python versions not supported on Windows Arm64
 
     runs-on: ${{ (matrix.os == 'windows' && (matrix.target == 'aarch64' && 'windows-11-arm' || 'windows-latest')) || (matrix.os == 'macos' && 'macos-latest') || 'ubuntu-latest' }}
     steps:
