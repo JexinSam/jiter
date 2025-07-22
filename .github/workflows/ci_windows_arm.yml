@@ -1,0 +1,90 @@
+name: Windows ARM64 CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build-test-windows-arm64:
+    name: Build and Test Windows ARM64 (Python ${{ matrix.python-version }})
+    runs-on: windows-11-arm # Explicitly use the Windows ARM64 hosted runner
+
+    strategy:
+      fail-fast: false # Allow other matrix jobs to continue if one fails
+      matrix:
+        # Define the Python versions you want to support on Windows ARM64
+        python-version: ["3.11", "3.12", "3.13", "3.14"] # Include 3.14 for future compatibility/beta
+
+    env:
+      # Define the Rust target for Windows ARM64
+      RUST_TARGET: aarch64-pc-windows-msvc
+      # Define the Rust toolchain to use
+      RUST_TOOLCHAIN: stable # Or 'nightly' if your project requires it
+      # Define the UV version
+      UV_VERSION: 0.7.13 # Use a specific version for stability
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain for Windows ARM64
+        # This action ensures `rustup` is available and installs the specified toolchain and target
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ env.RUST_TARGET }}
+          override: true # Set this toolchain as default for the job
+
+      - name: Set up Python ${{ matrix.python-version }} (ARM64)
+        # This action installs the specific Python version for the ARM64 architecture
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: arm64 # Crucially, specify the ARM64 architecture
+          allow-prereleases: true # Needed for Python 3.14 (beta)
+
+      - name: Install UV
+        # Installs the uv tool for fast dependency management and execution
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Build Python Wheel for Windows ARM64
+        # Uses maturin to build the Rust extension into a Python wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ env.RUST_TARGET }}
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }} # Use the toolchain installed by setup-rust-toolchain
+          args: --release --out dist --interpreter ${{ matrix.python-version }} # Build for the specific Python version in the matrix
+          working-directory: crates/jiter-python # Assuming your Python project is in this subdirectory
+
+      - name: List Built Wheels
+        run: dir crates\jiter-python\dist\ # Use 'dir' for Windows
+
+      - name: Install Built Wheel and Dependencies
+        # Install the built wheel and any Python test dependencies using uv
+        run: |
+          uv sync --frozen --no-install-project # Syncs project dependencies
+          uv pip install ormsgpack --no-index --find-links crates/jiter-python/dist # Install your built wheel
+          uv pip install -r crates/jiter-python/tests/requirements.txt # Install test dependencies
+        working-directory: crates/jiter-python
+
+      - name: Run Tests
+        # Execute your Python tests
+        run: uv run --no-sync pytest tests
+        working-directory: crates/jiter-python
+
+      - name: Upload Built Wheels
+        # Upload the generated wheels as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm64-wheels-py${{ matrix.python-version }}
+          path: crates/jiter-python/dist
+          retention-days: 7 # Retain artifacts for 7 days
