@@ -357,6 +357,11 @@ jobs:
           toolchain: stable # Use stable or your preferred toolchain
           target: aarch64-pc-windows-msvc
           override: true
+      - name: Check Runner Architecture
+        run: |
+          wmic os get osarchitecture
+          # Or for more detail on Windows:
+          # Get-WmiObject -Class Win32_Processor | Select-Object Architecture, AddressWidth, DataWidth, Name
 
       - name: set up python
         uses: actions/setup-python@v5
