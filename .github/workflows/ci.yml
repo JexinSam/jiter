@@ -321,7 +321,7 @@ jobs:
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14
           # NEW: Windows Arm64
           - os: windows
-            target: aarch64-pc-windows-msvc # Or just aarch64 if maturin can infer
+            target: aarch64 # Or just aarch64 if maturin can infer
             python-architecture: arm64
             interpreter: 3.11 3.12 3.13 3.14 # Or whatever versions
 
